@@ -1,0 +1,90 @@
+CREATE SCHEMA IF NOT EXISTS CCA;
+SET SEARCH_PATH TO CCA,PUBLIC;
+
+--'IF NOT EXISTS' can help to avoid errors and allows to execute CREATE TABLE statement multiple times--
+CREATE TABLE IF NOT EXISTS LeadCustomer(
+	CustomerID INTEGER UNIQUE PRIMARY KEY NOT NULL,
+	FirstName VARCHAR(20) NOT NULL,
+	Surname VARCHAR(40) NOT NULL,
+	BillingAddress VARCHAR(200) NOT NULL,
+	email VARCHAR(30) UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS Passenger(
+	PassengerID INTEGER UNIQUE PRIMARY KEY NOT NULL,
+	FirstName VARCHAR(20) NOT NULL,
+	Surname VARCHAR(40) NOT NULL,
+	PassportNo VARCHAR(30) UNIQUE NOT NULL,
+	Nationality VARCHAR(30) NOT NULL,
+	DOB DATE NOT NULL
+);
+	
+CREATE TABLE IF NOT EXISTS Flight(
+	FlightID INTEGER PRIMARY KEY NOT NULL,
+	FlightDate TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+	Origin VARCHAR(30) NOT NULL,
+	Destination VARCHAR(30) NOT NULL,
+	MaxCapacity INTEGER NOT NULL,
+	PricePerSeat DECIMAL NOT NULL
+);
+SET DATESTYLE='ISO,DMY';
+
+CREATE TABLE IF NOT EXISTS CCA.FlightBooking (
+	BookingID INTEGER PRIMARY KEY NOT NULL, 
+	CustomerID INTEGER NOT NULL,
+	FOREIGN KEY(CustomerID) REFERENCES LeadCustomer(CustomerID) ON UPDATE SET NULL ON DELETE SET NULL,
+	FlightID INTEGER NOT NULL,
+	FOREIGN KEY (FlightID) REFERENCES Flight(FlightID) ON UPDATE RESTRICT ON DELETE RESTRICT, 
+	NumSeats INTEGER NOT NULL, 
+	Status VARCHAR(1) NOT NULL DEFAULT 'R' CHECK(Status IN('R','C')),
+    BookingTime TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	TotalCost DECIMAL
+);
+
+CREATE TABLE IF NOT EXISTS CCA.SeatBooking(
+	BookingID INTEGER NOT NULL REFERENCES FlightBooking(BookingID) ON UPDATE CASCADE ON DELETE CASCADE,
+	PassengerID INTEGER NOT NULL REFERENCES Passenger(PassengerID),
+    SeatNumber VARCHAR(4) NOT NULL,
+	PRIMARY KEY(BookingID,SeatNumber)
+);
+
+ALTER TABLE Flight
+ADD CHECK(FlightDate>=CURRENT_TIMESTAMP);
+
+/*To Calculate 'Available' Status on the current flight information including
+maximum capacity, reserved and cancelled seats.'*/
+SET SEARCH_PATH TO CCA,PUBLIC;
+SELECT f.FlightID,f.MaxCapacity, f.MaxCapacity - coalesce(sum(b.NumSeats), 0) AS availableseats 
+FROM Flight f
+LEFT JOIN FlightBooking b
+ON f.FlightID = b.FlightID
+WHERE b.Status ='R'
+GROUP BY f.FlightID,f.MaxCapacity;
+--Reference:https://stackoverflow.com/questions/43679589--
+
+
+/*Created VIEW for showing Booking details of passengers
+by joining Passenger,Flight and FlightBooking tables*/
+CREATE VIEW BookingDetails AS
+SELECT p.PassengerID,p.FirstName,p.Surname,p.PassportNo,p.DOB,f.FlightID,f.Origin,f.Destination,f.FlightDate,
+b.BookingID,b.CustomerID,b.Status,b.TotalCost FROM Passenger p INNER JOIN
+FlightBooking b ON p.PassengerID=b.CustomerID INNER JOIN
+Flight f ON b.FlightID=f.FlightID;
+
+--Trigger to Update cost for new bookings--
+CREATE OR REPLACE FUNCTION CCA.update_TotalCost()
+RETURNS TRIGGER AS $$
+BEGIN 
+     UPDATE CCA.FlightBooking SET TotalCost=b.NumSeats*(SELECT PricePerSeat FROM CCA.Flight f WHERE f.FlightID=b.FlightID)
+	FROM CCA.FlightBooking b INNER JOIN CCA.Flight f ON b.FlightID=f.FlightID
+	WHERE b.BookingID=NEW.BookingID AND Status='R';
+	RETURN NEW;
+END;
+	$$
+	LANGUAGE plpgsql;
+	SELECT * FROM CCA.FlightBooking;
+	CREATE TRIGGER  update_TotalCost_trigger 
+	AFTER INSERT ON FlightBooking
+	FOR EACH ROW
+	EXECUTE FUNCTION update_TotalCost();
+	  

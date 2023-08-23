@@ -1,0 +1,151 @@
+SET SEARCH_PATH TO CCA,PUBLIC;
+SET DATESTYLE='ISO','DMY';
+--A. INSERT Statements--
+INSERT INTO LeadCustomer
+      VALUES
+      (7,'Jacob','Kelen','21,RiverSide Road,Norwich,UK','JacobK@gmail.com')
+      ON CONFLICT DO NOTHING;
+ SELECT * FROM LeadCustomer ORDER BY CustomerID;
+ SELECT * FROM LeadCustomer WHERE Surname='Singh';
+ 
+INSERT INTO Passenger
+       VALUES
+	   (108,'Adam','Smith','W234567','American','30-10-1989')
+	  ON CONFLICT DO NOTHING;
+SELECT * FROM Passenger WHERE PassengerID=108 AND Nationality='American';
+
+
+
+INSERT INTO Flight
+       VALUES
+	   (5,'15-10-2023','Vancouver','Paris',312,518)
+        ON CONFLICT DO NOTHING;
+   SELECT * FROM Flight ORDER BY FlightID;
+
+
+--B.To Delete the Customer record with Given CustomerID but pevent deletion of 'Active'(reserved) booking--
+
+CREATE OR REPLACE FUNCTION NoDeletion()
+RETURNS TRIGGER AS $$
+BEGIN
+      IF (SELECT Status FROM FlightBooking WHERE BookingID=OLD.BookingID)='R' THEN 
+         RAISE EXCEPTION 'You cannot delete reserved bookings';
+     ELSE 
+	      IF (SELECT Status FROM FlightBooking WHERE BookingID=OLD.BookingID)='C' THEN
+         DELETE FROM SeatBooking WHERE BookingID=OLD.BookingID;
+         DELETE FROM FlightBooking WHERE BookingID=OLD.BookingID;
+	
+     END IF;
+    END IF; 
+     RETURN OLD;
+END;
+$$
+LANGUAGE plpgsql;
+
+  CREATE TRIGGER NoDeletion BEFORE
+  DELETE ON CCA.FlightBooking FOR EACH ROW
+  WHEN (pg_trigger_depth()<1) 
+  EXECUTE FUNCTION NoDeletion();
+  
+   DELETE FROM FlightBooking  WHERE CustomerID=7 AND Status='R';
+  ROLLBACK;
+  
+  DELETE FROM FlightBooking WHERE CustomerID=2 AND Status='C';
+  ROLLBACK;
+  
+
+  --C. Check Status of Seat--
+  /*To Calculate and Check 'Available' Status on the current flight information including
+maximum capacity, reserved and cancelled seats.'*/
+
+SELECT f.FlightID,f.MaxCapacity,b.NumSeats AS Booked,f.MaxCapacity - coalesce(sum(b.NumSeats), 0) AS availableseats
+FROM Flight f
+LEFT JOIN FlightBooking b
+ON f.FlightID = b.FlightID
+WHERE b.Status ='R' 
+GROUP BY f.FlightID,f.MaxCapacity,b.NumSeats;
+--Reference:https://stackoverflow.com/questions/43679589--
+
+ --D. To Check Status of all seats--
+ SELECT f.FlightID,b.Status, COUNT(*) AS TotalSeats 
+ FROM Flight f  RIGHT JOIN FlightBooking b ON f.FlightID=b.FlightID
+ WHERE b.Status='R' OR b.Status='C' GROUP BY f.FlightID,b.Status;
+
+
+
+--E. To Produce Ranked list of All Lead customers --
+SET SEARCH_PATH TO CCA,PUBLIC;
+SELECT l.CustomerID,b.BookingID,b.TotalCost, CONCAT(l.FirstName,'',l.Surname) AS FullName
+FROM LeadCustomer l INNER JOIN FlightBooking b ON b.CustomerID=l.CustomerID 
+GROUP BY l.CustomerID,b.BookingID,b.TotalCost
+ORDER BY TotalCost DESC;
+
+--F. 
+CREATE OR REPLACE PROCEDURE MakeBooking(
+BookingID Integer,
+  CustomerID Integer,
+  FlightID Integer,
+  NumSeats Integer,
+  RequiredSeats Integer,
+  FirstName varchar(20),
+  Surname varchar(40),
+  SeatNumber char(4)
+)
+LANGUAGE plpgsql
+AS $$
+
+     BEGIN 
+           SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+ --The Serializable transaction level provides a rigorous guarantee that each transaction sees a wholly consistent view of the database.--
+		   --Reference-Postgresql—-
+
+	   SELECT f.FlightID,f.MaxCapacity,b.NumSeats AS Booked,f.MaxCapacity - coalesce(sum(b.NumSeats), 0) AS availableseats
+       FROM Flight f LEFT JOIN FlightBooking b
+       ON f.FlightID = b.FlightID WHERE b.Status ='R' 
+       GROUP BY f.FlightID,f.MaxCapacity,b.NumSeats;
+	   
+	 IF (f.MaxCapacity-b.NumSeats)>=RequiredSeats THEN
+	   
+	     IF NOT EXISTS(SELECT* FROM LeadCustomer l WHERE l.CustomerID=CustomerID) THEN
+		     INSERT INTO LeadCustomer(CustomerID,FirstName,Surname)
+			    values
+				(CustomerID,FirstName,Surname);
+				END IF;
+		   
+		   
+		   INSERT INTO FlightBooking(BookingID,CustomerID,FlightID,NumSeats,Status)
+		      VALUES
+			  (BookingID,CustomerID,FlightID,RequiredSeats,'R');
+			
+			INSERT INTO SeatBooking(BookingID,SeatNumber)
+			      VALUES
+				  (BookingID,SeatNumber);
+			  COMMIT;
+			ELSE
+			   RAISE EXCEPTION 'Sorry!Seats are Unavailable';
+			   END IF;
+			   
+			   EXCEPTION 
+			     WHEN OTHERS THEN
+			   ROLLBACK;
+			 
+ 			 RAISE NOTICE 'Booking Complete %',BookingID;
+		 END; 
+		$$;   
+	   
+	  CALL MakeBooking(10,9,6,1,'Sneha','Rohanna','20F');
+	    
+
+  
+)
+
+
+
+
+--G. Cancel the booking for given BookingID, but not deleting record--
+UPDATE CCA.FlightBooking
+SET Status='C' WHERE BookingID=16;
+SELECT*FROM CCA.FlightBooking WHERE Status='C';
+
+
+--References:Lecture Notes,postgresql --

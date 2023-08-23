@@ -1,0 +1,65 @@
+SET SEARCH_PATH TO CCA,PUBIC;
+
+INSERT INTO LeadCustomer(CustomerID,FirstName,Surname,BillingAddress,email)
+        VALUES 
+		(1,'Joshua','Finch','32 Colmon Road,Norwich,UK','JoshuaFinch21@gmail.com'),
+	      (2,'Neri','jus','132 6th Street,New York','Nerijus@yahoo.com'),
+		(3,'Adam','Smith','76 Liverpool Street,London,UK','SmithAdam0428@gmail.com'),
+		(4,'Bianna','Giallard','48 Park Drive.Cambridge,UK','BiannaGiallard28@gmail.com'),
+		(5,'Prabh','Singh','128 Ranjit Avenue,Amritsar,India','prabhdeepsingh@gmail.com'),
+		(6,'Michael','Haverford','5-4658 Barter Street,Surrey,Canada','MichHaverford@yahoo.com')
+		ON CONFLICT DO NOTHING;
+		--'ON CONFLICT DO NOTHING' helps to avoid error for duplicate key violates UNIQUE constraint--
+	 
+	 SET DATESTYLE='ISO,DMY'; 
+	 
+INSERT INTO Passenger(PassengerID,FirstName,Surname,PassportNo,Nationality,DOB)
+       VALUES
+	   (101,'George','Oldale','G145367','American','4-06-2002'),
+	   (102,'Jem','Pitchard','JU176581','British','12-02-1996'),
+	   (103,'Joshua','Finch','F253476','British','24-11-1990'),
+	   (104,'Ashwini','Nagpal','SA623409','British-Indian','20-09-2004'),
+	   (105,'Bianna','Giallard','R394126','British','26-01-2003'),
+	   (106,'Prabh','Singh','P5400223','Indian','03-05-2000'),
+	   (107,'Harriet','Haverford','TH034765','Europian','28-04-2003')
+	   ON CONFLICT DO NOTHING;
+	 
+	 
+INSERT INTO Flight(FlightID,FlightDate,Origin,Destination,MaxCapacity,PricePerSeat)
+       VALUES
+	   (1,'01-08-2023','NewYork','London','480','457'),
+	   (2,'13-11-2023','Tokyo','Doha','350','580'),
+	   (3,'15-06-2023','London','New Delhi','560','396'),
+	   (4,'24-07-2023','London','Amsterdam','650','470')
+       ON CONFLICT DO NOTHING;
+	   
+INSERT INTO FlightBooking(BookingID, CustomerID, FlightID, NumSeats, Status,
+BookingTime)
+       VALUES
+	   (11,1,1,2,'R','08-09-2023'),
+	   (12,2,1,1,'C','04-12-2023'),
+	   (13,3,4,2,'R','04-04-2023'),
+	   (14,4,2,3,'R','12-02-2023'),
+	   (15,5,4,1,'C','03-02-2023'),
+	   (16,3,3,1,'R','03-10-2023'),
+	   (17,6,1,4,'R','04-05-2023')
+	   ON CONFLICT DO NOTHING;
+	  
+INSERT INTO SeatBooking(BookingID,PassengerID,SeatNumber)
+       VALUES
+	   (11,101,'11D'),
+	   (12,102,'24B'),
+	   (13,103,'12D'),
+	   (14,104,'20J'),
+	   (14,105,'32F'),
+         (15,106,'17C'),
+	   (16,108,'08E'),
+	   (17,107,'31A')
+	   ON CONFLICT DO NOTHING;
+	   
+	   
+UPDATE Flight
+SET FlightDate='01-08-2023' WHERE Origin='NewYork' AND Destination='London';
+
+UPDATE Flight
+SET FlightDate='13-11-2023',Destination='Bahrain' WHERE FlightID=2;
