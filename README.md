@@ -1,172 +1,155 @@
-# ✈️ Flight Booking Database System (SQL Coursework Project)
+# ✈️ Flight Booking Database System
 
-This project implements a **relational database system for managing airline flight bookings**, developed as part of the **CMP-4010B Database Systems module**.
+> Relational SQL database modelling airline bookings — DDL schema design, constraints, triggers, transactions, and analytical queries using PostgreSQL.
 
-The system models a simplified airline reservation platform where customers can search flights, book seats, manage passengers, and track booking information.
-
-The project focuses on **database schema design, SQL constraints, and transaction processing** using relational database principles.
-
----
-
-# 📌 Project Objective
-
-The goal of this coursework was to design and implement a **fully functional relational database** that supports flight booking operations while ensuring **data integrity and consistency**.
-
-The system demonstrates how SQL can be used to manage airline booking workflows such as:
-
-- creating flights
-- checking seat availability
-- managing bookings
-- handling passenger records
-- tracking booking status
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791?style=flat&logo=postgresql)](https://postgresql.org)
+[![SQL](https://img.shields.io/badge/SQL-DDL%20%2B%20DML-003B57?style=flat)](DDL_Statements.sql)
 
 ---
 
-# 🗄️ Database Design
+## 📌 Project Overview
 
-The database uses a **relational schema with multiple connected entities**.
+This project implements a fully functional relational database for managing airline flight bookings. It demonstrates real-world SQL skills including schema design, data integrity constraints, transactional operations, and analytical querying.
 
-## Main Entities
-
-### Flights
-- FlightID
-- FlightDate
-- Origin
-- Destination
-- Maximum capacity
-- Price per seat
-
-### Customers
-- CustomerID
-- FirstName
-- Surname
-- BillingAddress
-- Email
-
-### Bookings
-- BookingID
-- CustomerID
-- FlightID
-- Number of seats
-- Booking status
-- Booking timestamp
-
-### Passengers
-- PassengerID
-- FirstName
-- Surname
-- Passport number
-- Nationality
-- Date of birth
-
-These entities are connected through **primary and foreign key relationships** to maintain referential integrity.
+**Academic context:** Completed as part of the CMP-4010B Database Systems module, BSc Computing Science, University of East Anglia.
 
 ---
 
-# ⚙️ Database Features Implemented
+## 🗄️ Database Schema
 
-The project demonstrates several core SQL concepts.
+The system models five interconnected entities:
 
-## Database Definition (DDL)
-
-- Table creation
-- Primary keys
-- Foreign keys
-- Check constraints
-- Indexes
-- Views
-- Triggers and functions
-
-## Data Manipulation (DML)
-
-- Insert flight records
-- Insert customer bookings
-- Insert passenger data
-- Delete records
-- Update booking status
-
-## Transactions
-
-The database supports booking workflows such as:
-
-- checking seat availability
-- inserting new bookings
-- handling booking cancellations
-- validating data constraints
-
----
-
-# 🔎 Example Queries
-
-### Check seat availability
-
-```sql
-SELECT FlightID, FlightDate,
-COUNT(BookingID) AS BookedSeats,
-(MaxCapacity - COUNT(BookingID)) AS AvailableSeats
-FROM Flights
-JOIN Bookings USING (FlightID)
-GROUP BY FlightID, FlightDate, MaxCapacity;
+```
+Flights ──< Bookings >── Customers
+              │
+         Passengers
 ```
 
-### Rank customers by total spending
+| Table | Key Columns |
+|---|---|
+| `Flights` | FlightID, FlightDate, Origin, Destination, MaxCapacity, PricePerSeat |
+| `Customers` | CustomerID, FirstName, Surname, BillingAddress, Email |
+| `Bookings` | BookingID, CustomerID (FK), FlightID (FK), NumSeats, Status, Timestamp |
+| `Passengers` | PassengerID, FirstName, Surname, PassportNumber, Nationality, DOB |
 
+> 
+
+---
+
+## ⚙️ Features Implemented
+
+**DDL (Schema Definition)**
+- Primary keys, foreign keys, check constraints
+- Indexes on frequently queried columns
+- Views for common reporting queries
+- Triggers to enforce business rules (e.g. seat capacity validation)
+
+**DML (Data Manipulation)**
+- Insert / update / delete operations
+- Booking status management (confirmed, cancelled, pending)
+
+**Transactions**
+- Seat availability check → booking insert as atomic operation
+- Cancellation workflow with status rollback
+- Data constraint validation scenarios (success + failure cases)
+
+---
+
+## 🔎 Analytical Queries
+
+### Seat availability by flight
 ```sql
-SELECT CustomerID,
-COUNT(BookingID) AS TotalBookings,
-SUM(PricePerSeat * NumSeats) AS TotalSpend
-FROM Bookings
-JOIN Flights USING (FlightID)
-GROUP BY CustomerID
+SELECT
+    f.FlightID,
+    f.FlightDate,
+    f.Origin,
+    f.Destination,
+    f.MaxCapacity,
+    COALESCE(SUM(b.NumSeats), 0) AS BookedSeats,
+    f.MaxCapacity - COALESCE(SUM(b.NumSeats), 0) AS AvailableSeats
+FROM Flights f
+LEFT JOIN Bookings b ON f.FlightID = b.FlightID
+    AND b.Status = 'confirmed'
+GROUP BY f.FlightID, f.FlightDate, f.Origin, f.Destination, f.MaxCapacity
+ORDER BY f.FlightDate;
+```
+
+### Customer spend ranking
+```sql
+SELECT
+    c.CustomerID,
+    c.FirstName || ' ' || c.Surname AS CustomerName,
+    COUNT(b.BookingID) AS TotalBookings,
+    SUM(f.PricePerSeat * b.NumSeats) AS TotalSpend
+FROM Customers c
+JOIN Bookings b ON c.CustomerID = b.CustomerID
+JOIN Flights f ON b.FlightID = f.FlightID
+WHERE b.Status = 'confirmed'
+GROUP BY c.CustomerID, CustomerName
 ORDER BY TotalSpend DESC;
 ```
 
----
+### Busiest routes by booking volume
+```sql
+SELECT
+    f.Origin,
+    f.Destination,
+    COUNT(b.BookingID) AS TotalBookings,
+    SUM(b.NumSeats) AS TotalPassengers,
+    ROUND(AVG(f.PricePerSeat), 2) AS AvgFareGBP
+FROM Flights f
+JOIN Bookings b ON f.FlightID = b.FlightID
+WHERE b.Status = 'confirmed'
+GROUP BY f.Origin, f.Destination
+ORDER BY TotalBookings DESC
+LIMIT 10;
+```
 
-# 🧠 Key Skills Demonstrated
-
-- SQL
-- Relational database design
-- Data integrity constraints
-- Transaction management
-- Multi-table queries
-- Data modeling
-- Query optimisation basics
-
----
-
-# 🛠️ Tools Used
-
-- PostgreSQL
-- pgAdmin
-- SQL
-
----
-
-# 🎓 Academic Context
-
-This project was completed as part of a **Database Systems coursework assignment** where the objective was to design and test a relational database capable of supporting flight booking transactions.
-
-The coursework required implementing:
-
-- database schema definitions
-- constraints and triggers
-- transactional queries
-- testing scenarios demonstrating successful and unsuccessful operations.
-
----
-
-# 📂 Repository Contents
-
-- SQL scripts for database schema
-- queries for transaction testing
-- booking and passenger management queries
+### Cancellation rate by route
+```sql
+SELECT
+    f.Origin,
+    f.Destination,
+    COUNT(*) AS TotalBookings,
+    SUM(CASE WHEN b.Status = 'cancelled' THEN 1 ELSE 0 END) AS Cancellations,
+    ROUND(
+        100.0 * SUM(CASE WHEN b.Status = 'cancelled' THEN 1 ELSE 0 END) / COUNT(*), 1
+    ) AS CancellationRatePct
+FROM Flights f
+JOIN Bookings b ON f.FlightID = b.FlightID
+GROUP BY f.Origin, f.Destination
+HAVING COUNT(*) >= 5
+ORDER BY CancellationRatePct DESC;
+```
 
 ---
 
-# 👩‍💻 Author
+## 📂 Repository Contents
 
-**Seerat Kaur**
+| File | Description |
+|---|---|
+| `DDL_Statements.sql` | Full schema — CREATE TABLE, constraints, indexes, triggers, views |
+| `DML_Statements.sql` | Insert, update, delete operations with test data |
+| `Transactions.sql` | Transactional booking workflows — success and failure scenarios |
+| `Transactions Of Interest (Test data).docx` | Test case documentation |
 
-Data Analyst | Data Science Enthusiast  
-Python • SQL • Machine Learning • Power BI
+---
+
+## 🛠 Tools
+
+- **PostgreSQL** — relational database engine
+- **pgAdmin** — schema design and query execution
+
+---
+
+## 🧠 Skills Demonstrated
+
+SQL schema design · DDL constraints & triggers · Transaction management · Window functions · Multi-table analytical queries · Data integrity enforcement · Query optimisation basics
+
+---
+
+## 👩‍💻 Author
+
+**Seerat Kaur** — Junior Data Analyst
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0A66C2?style=flat&logo=linkedin)](https://www.linkedin.com/in/seerat-kaur-4878bb249/)
+[![GitHub](https://img.shields.io/badge/GitHub-KaurSeerat-181717?style=flat&logo=github)](https://github.com/KaurSeerat)
